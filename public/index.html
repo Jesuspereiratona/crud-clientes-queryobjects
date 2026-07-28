@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Clientes</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: 30px auto; }
+        h2 { margin-top: 24px; }
+        input { padding: 6px; margin: 3px 0; width: 100%; box-sizing: border-box; }
+        button { padding: 6px 14px; margin-top: 6px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        td, th { border: 1px solid #ddd; padding: 6px; }
+        #mensaje { font-weight: bold; }
+    </style>
+</head>
+
+<body>
+    <h2>Crear cliente</h2>
+    <form id="crear">
+        <input id="c_nombre" placeholder="nombre">
+        <input id="c_rut" placeholder="rut">
+        <input id="c_edad" placeholder="edad">
+        <button>Crear</button>
+    </form>
+
+    <h2>Buscar</h2>
+    <form id="buscar">
+        <input id="b_rut" placeholder="rut (opcional)">
+        <input id="b_edad" placeholder="edad (opcional)">
+        <input id="b_nombre" placeholder="nombre (opcional)">
+        <input id="b_edadMin" placeholder="edad min (opcional)">
+        <input id="b_edadMax" placeholder="edad max (opcional)">
+        <button>Buscar</button>
+    </form>
+
+    <h2>Modificar nombre</h2>
+    <form id="modificar">
+        <input id="m_rut" placeholder="rut">
+        <input id="m_nombre" placeholder="nuevo nombre">
+        <button>Modificar</button>
+    </form>
+
+    <h2>Eliminar por rut</h2>
+    <form id="eliminar">
+        <input id="e_rut" placeholder="rut">
+        <button>Eliminar</button>
+    </form>
+
+    <h2>Eliminar por rango de edad</h2>
+    <form id="eliminarRango">
+        <input id="er_min" placeholder="edad min">
+        <input id="er_max" placeholder="edad max">
+        <button>Eliminar</button>
+    </form>
+
+    <p id="mensaje"></p>
+    <table id="tabla" border="1">
+        <tr><th>rut</th><th>nombre</th><th>edad</th></tr>
+    </table>
+
+    <script>
+        const API = "http://localhost:3000/clientes"
+        const mensaje = document.getElementById("mensaje")
+        const tabla = document.getElementById("tabla")
+
+        function pintar(clientes) {
+            tabla.innerHTML = "<tr><th>rut</th><th>nombre</th><th>edad</th></tr>"
+            const lista = Array.isArray(clientes) ? clientes : [clientes]
+            lista.forEach(c => {
+                tabla.innerHTML += `<tr><td>${c.rut}</td><td>${c.nombre}</td><td>${c.edad}</td></tr>`
+            })
+        }
+
+        crear.addEventListener("submit", async (e) => {
+            e.preventDefault()
+            const cliente = { nombre: c_nombre.value, rut: c_rut.value, edad: c_edad.value }
+            const r = await fetch(API, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(cliente)
+            })
+            const json = await r.json()
+            mensaje.textContent = r.ok ? "cliente creado" : json.error
+            if (r.ok) pintar(json.data)
+        })
+
+        buscar.addEventListener("submit", async (e) => {
+            e.preventDefault()
+            const params = new URLSearchParams()
+            if (b_rut.value) params.set("rut", b_rut.value)
+            if (b_edad.value) params.set("edad", b_edad.value)
+            if (b_nombre.value) params.set("nombre", b_nombre.value)
+            if (b_edadMin.value) params.set("edadMin", b_edadMin.value)
+            if (b_edadMax.value) params.set("edadMax", b_edadMax.value)
+
+            const url = b_rut.value ? `${API}/${b_rut.value}` : `${API}?${params}`
+            const r = await fetch(url)
+            const json = await r.json()
+            mensaje.textContent = r.ok ? "" : json.error
+            if (r.ok) pintar(json.data)
+        })
+
+        modificar.addEventListener("submit", async (e) => {
+            e.preventDefault()
+            const r = await fetch(`${API}/${m_rut.value}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nombre: m_nombre.value })
+            })
+            const json = await r.json()
+            mensaje.textContent = r.ok ? "cliente modificado" : json.error
+            if (r.ok) pintar(json.data)
+        })
+
+        eliminar.addEventListener("submit", async (e) => {
+            e.preventDefault()
+            const r = await fetch(`${API}/${e_rut.value}`, { method: "DELETE" })
+            const json = await r.json()
+            mensaje.textContent = r.ok ? json.mensaje : json.error
+            if (r.ok) tabla.innerHTML = "<tr><th>rut</th><th>nombre</th><th>edad</th></tr>"
+        })
+
+        eliminarRango.addEventListener("submit", async (e) => {
+            e.preventDefault()
+            const r = await fetch(`${API}?edadMin=${er_min.value}&edadMax=${er_max.value}`, { method: "DELETE" })
+            const json = await r.json()
+            mensaje.textContent = r.ok ? `eliminados: ${json.nombres.join(", ")}` : json.error
+            if (r.ok) tabla.innerHTML = "<tr><th>rut</th><th>nombre</th><th>edad</th></tr>"
+        })
+    </script>
+</body>
+
+</html>
