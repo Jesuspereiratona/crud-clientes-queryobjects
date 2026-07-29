@@ -11,138 +11,84 @@ const pool = new Pool({
 
 app.use(express.static(path.join(__dirname, "/public")))
 app.use(express.json())
-app.use(express.urlencoded())
 
-// GET de todoo
+// GET /clientes → todos, o filtrado por ?rut, ?edad, ?nombre
 app.get("/clientes", async (req, res) => {
-    const { edad, edadMin, edadMax, nombre } = req.query
+    const { rut, edad, nombre } = req.query
 
-    let sql = "SELECT * FROM clientes"
-    let values = []
+    let q = { text: "SELECT rut, nombre, edad FROM clientes", values: [] }
 
-    if (edadMin && edadMax) {
-        sql += " WHERE edad BETWEEN $1 AND $2"
-        values = [edadMin, edadMax]
-    } else if (edad) {
-        sql += " WHERE edad = $1"
-        values = [edad]
-    } else if (nombre) {
-        sql += " WHERE nombre ILIKE $1"
-        values = [nombre + "%"]
-    }
+    if (rut) q = { text: "SELECT rut, nombre, edad FROM clientes WHERE rut = $1", values: [rut] }
+    else if (edad) q = { text: "SELECT rut, nombre, edad FROM clientes WHERE edad = $1", values: [edad] }
+    else if (nombre) q = { text: "SELECT rut, nombre, edad FROM clientes WHERE nombre ILIKE $1", values: [nombre + "%"] }
 
     try {
-        const result = await pool.query(sql, values)
-        if (!result.rowCount) {
-            return res.status(404).json({ error: "no hay clientes que cumplan con el criterio" })
-        }
-        res.json({ data: result.rows, count: result.rowCount })
+        const { rows } = await pool.query(q)
+        if (!rows.length) return res.status(404).json({ ok: false, mensaje: "Cliente no existe" })
+        res.json({ ok: true, data: rows })
     } catch (error) {
         console.error(error)
-        res.status(500).json({ error: "Hubo un error al consultar los datos." })
+        res.status(500).json({ ok: false, mensaje: "Error al consultar" })
     }
 })
 
-//get rut de data s
-app.get("/clientes/:rut", async (req, res) => {
-    const { rut } = req.params
-
-    try {
-        const result = await pool.query("SELECT * FROM clientes WHERE rut = $1", [rut])
-        if (!result.rowCount) {
-            return res.status(404).json({ error: "cliente no existe" })
-        }
-        res.json({ data: result.rows[0] })
-    } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: "Hubo un error al consultar los datos." })
-    }
-})
-
+// POST /clientes
 app.post("/clientes", async (req, res) => {
-    const { nombre, rut, edad } = req.body
+    const { rut, nombre, edad } = req.body
 
-    if (isNaN(edad)) {
-        return res.status(400).json({ error: "edad debe ser numérica" })
+    if (isNaN(edad)) return res.status(400).json({ ok: false, mensaje: "edad debe ser numérica" })
+
+    const q = {
+        text: "INSERT INTO clientes(rut, nombre, edad) VALUES ($1, $2, $3) RETURNING rut, nombre, edad",
+        values: [rut, nombre, edad]
     }
 
     try {
-        const result = await pool.query({
-            text: "INSERT INTO clientes(rut, nombre, edad) VALUES ($1, $2, $3) RETURNING *",
-            values: [rut, nombre, edad]
-        })
-        res.status(201).json({ data: result.rows[0] })
+        const { rows } = await pool.query(q)
+        res.status(201).json({ ok: true, data: rows[0] })
     } catch (error) {
+        if (error.code === "23505") return res.status(409).json({ ok: false, mensaje: "El rut ya existe" })
         console.error(error)
-        if (error.code === "23505") { // llave duplicada
-            return res.status(409).json({ error: "ya existe un cliente con ese rut" })
-        }
-        res.status(500).json({ error: "Hubo un error al insertar el nuevo registro." })
+        res.status(500).json({ ok: false, mensaje: "Error al crear" })
     }
 })
 
-// put pa cambiar csnt name 
+// PUT /clientes/:rut → modifica solo nombre
 app.put("/clientes/:rut", async (req, res) => {
-    const { rut } = req.params
-    const { nombre } = req.body
+    const q = {
+        text: "UPDATE clientes SET nombre = $1 WHERE rut = $2",
+        values: [req.body.nombre, req.params.rut]
+    }
 
     try {
-        const result = await pool.query({
-            text: "UPDATE clientes SET nombre = $1 WHERE rut = $2 RETURNING *",
-            values: [nombre, rut]
-        })
-        if (!result.rowCount) {
-            return res.status(404).json({ error: "cliente no existe" })
-        }
-        res.json({ data: result.rows[0] })
+        const { rowCount } = await pool.query(q)
+        if (!rowCount) return res.status(404).json({ ok: false, mensaje: "Cliente no existe" })
+        res.json({ ok: true, rowCount, mensaje: "Actualizado correctamente" })
     } catch (error) {
         console.error(error)
-        res.status(500).json({ error: "No se pudo editar el recurso" })
+        res.status(500).json({ ok: false, mensaje: "Error al actualizar" })
     }
 })
 
-// chao por rut 
-app.delete("/clientes/:rut", async (req, res) => {
-    const { rut } = req.params
-
-    try {
-        const result = await pool.query("DELETE FROM clientes WHERE rut = $1 RETURNING *", [rut])
-        if (!result.rowCount) {
-            return res.status(404).json({ error: "cliente no existe" })
-        }
-        res.json({ mensaje: "cliente eliminado", data: result.rows[0] })
-    } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: "No se pudo eliminar el recurso" })
-    }
-})
-
-// borrar clientes max min function de htm
+// DELETE /clientes?rut=  |  ?nombre=  |  ?edad=   (nunca borra más de 1)
 app.delete("/clientes", async (req, res) => {
-    const { edad, edadMin, edadMax } = req.query
+    const { rut, nombre, edad } = req.query
 
-    let sql = "DELETE FROM clientes WHERE"
-    let values = []
-
-    if (edadMin && edadMax) {
-        sql += " edad BETWEEN $1 AND $2"
-        values = [edadMin, edadMax]
-    } else if (edad) {
-        sql += " edad = $1"
-        values = [edad]
-    } else {
-        return res.status(400).json({ error: "indique edad o edadMin/edadMax" })
-    }
+    let select = { text: "SELECT rut FROM clientes WHERE rut = $1", values: [rut] }
+    if (nombre) select = { text: "SELECT rut FROM clientes WHERE nombre ILIKE $1", values: [nombre + "%"] }
+    else if (edad) select = { text: "SELECT rut FROM clientes WHERE edad = $1", values: [edad] }
 
     try {
-        const result = await pool.query(sql + " RETURNING nombre", values)
-        if (!result.rowCount) {
-            return res.status(404).json({ error: "no hay clientes que cumplan con el criterio" })
-        }
-        res.json({ nombres: result.rows.map(c => c.nombre) })
+        const match = await pool.query(select)
+
+        if (match.rowCount === 0) return res.status(404).json({ ok: false, mensaje: "Cliente no existe" })
+        if (match.rowCount > 1) return res.status(400).json({ ok: false, mensaje: "Hay más de un cliente, refine el criterio" })
+
+        const del = await pool.query({ text: "DELETE FROM clientes WHERE rut = $1", values: [match.rows[0].rut] })
+        res.json({ ok: true, rowCount: del.rowCount, mensaje: "Eliminado correctamente" })
     } catch (error) {
         console.error(error)
-        res.status(500).json({ error: "No se pudo eliminar el recurso" })
+        res.status(500).json({ ok: false, mensaje: "Error al eliminar" })
     }
 })
 
