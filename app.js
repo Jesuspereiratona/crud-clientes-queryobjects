@@ -12,7 +12,7 @@ const pool = new Pool({
 app.use(express.static(path.join(__dirname, "/public")))
 app.use(express.json())
 
-// GET /clientes → todos, o filtrado por ?rut, ?edad, ?nombre
+// GET de todo
 app.get("/clientes", async (req, res) => {
     const { rut, edad, nombre } = req.query
 
@@ -32,7 +32,7 @@ app.get("/clientes", async (req, res) => {
     }
 })
 
-// POST /clientes
+// POST
 app.post("/clientes", async (req, res) => {
     const { rut, nombre, edad } = req.body
 
@@ -53,7 +53,7 @@ app.post("/clientes", async (req, res) => {
     }
 })
 
-// PUT /clientes/:rut → modifica solo nombre
+// PUT de name 
 app.put("/clientes/:rut", async (req, res) => {
     const q = {
         text: "UPDATE clientes SET nombre = $1 WHERE rut = $2",
@@ -70,7 +70,7 @@ app.put("/clientes/:rut", async (req, res) => {
     }
 })
 
-// DELETE /clientes?rut=  |  ?nombre=  |  ?edad=   (nunca borra más de 1)
+// DELETE rutts
 app.delete("/clientes", async (req, res) => {
     const { rut, nombre, edad } = req.query
 
